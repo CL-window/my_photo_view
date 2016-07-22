@@ -1,11 +1,17 @@
 package com.example.photoview;
 
 import android.content.Context;
+import android.content.res.ColorStateList;
 import android.graphics.BitmapFactory;
+import android.graphics.Color;
+import android.graphics.drawable.Drawable;
 import android.media.ThumbnailUtils;
 import android.net.Uri;
+import android.os.Handler;
+import android.os.Looper;
 import android.support.annotation.NonNull;
 import android.support.v7.widget.RecyclerView;
+import android.text.TextUtils;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.LayoutInflater;
@@ -17,6 +23,8 @@ import android.widget.ImageView;
 import android.widget.PopupWindow;
 import android.widget.TextView;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -25,20 +33,30 @@ import java.util.Map;
  * Created by slack on 2016/7/21 13:28 .
  */
 public class PhotoViewAdapter extends RecyclerView.Adapter<PhotoViewAdapter.PhotoViewHolder>{
-    private Context context;
-    List<String> testData; // test
-    List<Map<String,String>> data; //  title +  uri
-    String[] fileType = {"video","photo","gif"};
-    GifView gifView ;
-    final PopupWindow popwindow ;
-    float downX,downY;
 
-    public PhotoViewAdapter(Context context, List<Map<String,String>> data) {
-        this.context = context;
+
+    protected RecyclerView mRecyclerView;
+    private List<String> testData; // test
+    private List<Map<String,String>> data; //  title +  uri
+    private String[] fileType = {"video","photo","gif"};
+    private GifView gifView ;
+    private PopupWindow popwindow ;
+    private float downX,downY;
+    private int selectColor;
+    public boolean operation;
+//    public  List<Map<String,String>> selectData = new ArrayList<>();
+    public String[] selectPath;//感觉使用数组会好一些，处理浪费空间
+    private Handler mHandler;
+
+    public PhotoViewAdapter(RecyclerView recyclerView, List<Map<String,String>> data) {
+        this.mRecyclerView = recyclerView;
         this.data = data;
-        gifView = new GifView(context);
+        gifView = new GifView(mRecyclerView.getContext());
         popwindow = new PopupWindow(gifView, FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, false);
         popwindow.setAnimationStyle(R.style.popwin_anim_style); // 动画
+        selectColor = Color.parseColor("#77000000");
+        selectPath = new String[data.size()];
+        mHandler = new Handler(Looper.getMainLooper());
 
     }
 //    public PhotoViewAdapter(Context context, List<String> data) {
@@ -48,7 +66,7 @@ public class PhotoViewAdapter extends RecyclerView.Adapter<PhotoViewAdapter.Phot
 
     @Override
     public PhotoViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
-        return new PhotoViewHolder(LayoutInflater.from(context).inflate(R.layout.photo_item,parent,false));
+        return new PhotoViewHolder(LayoutInflater.from(mRecyclerView.getContext()).inflate(R.layout.photo_item,parent,false));
     }
 
     @Override
@@ -66,20 +84,56 @@ public class PhotoViewAdapter extends RecyclerView.Adapter<PhotoViewAdapter.Phot
 //        return testData.size();
     }
 
+    /**
+     * 子线程里执行，操作防止时间过长
+     */
+    public void cancleSelect(){
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                operation = false;
+                for(int i = 0; i < selectPath.length; i++){
+                    if(!TextUtils.isEmpty(selectPath[i])){
+                        final RecyclerView.ViewHolder viewHolder = mRecyclerView.findViewHolderForAdapterPosition(i);
+                        final int opt = i;
+                        if(viewHolder != null && viewHolder instanceof PhotoViewHolder){
+                            mHandler.post(new Runnable() {
+                                @Override
+                                public void run() {
+                                    ((PhotoViewHolder) viewHolder).unSelect(opt);
+                                }
+                            });
+                        }
+                    }
+                }
+            }
+        }).start();
+
+
+    }
+
     class PhotoViewHolder extends RecyclerView.ViewHolder {
 
-        ImageView photoView;
+        ImageView photoView,selcetView;
 //        TextView photoInfo;
         public PhotoViewHolder(View itemView) {
             super(itemView);
             photoView = (ImageView) itemView.findViewById(R.id.photo_item_img);
+            selcetView = (ImageView) itemView.findViewById(R.id.photo_item_selcet);
 //            photoInfo = (TextView)itemView.findViewById(R.id.photo_item_info);
             photoView.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View view) {
                     int pos = getAdapterPosition();
 //                    Log.i("slack","click..." + pos + " " + testData.get(pos) );
-                    Log.i("slack","click..." + pos + " " + data.get(pos) );
+//                    Log.i("slack","click..." + pos + " " + data.get(pos) );
+                    if(operation){
+                        if (selcetView.getVisibility() == View.GONE) {
+                            select(pos);
+                        } else {
+                            unSelect(pos);
+                        }
+                    }
 
                 }
             });
@@ -128,6 +182,33 @@ public class PhotoViewAdapter extends RecyclerView.Adapter<PhotoViewAdapter.Phot
 
         }
 
+        private void select(int pos) {
+            photoView.setColorFilter(selectColor);
+            selcetView.setVisibility(View.VISIBLE);
+            selectPath[pos] = data.get(pos).get("pic_path");
+//                            Map<String,String> map = new HashMap<>();
+//                            map.put("select_position",pos+"");
+//                            map.put("pic_path",data.get(pos).get("pic_path"));
+//                            selectData.add(pos,map);
+        }
+
+        private void unSelect(int pos) {
+            photoView.setColorFilter(null);
+            selcetView.setVisibility(View.GONE);
+//                            selectData.remove() // 删还需要遍历
+            selectPath[pos] = "";
+        }
+
+    }
+
+    public void removeData(final int position) {
+        data.remove(position);
+        mHandler.post(new Runnable() {
+            @Override
+            public void run() {
+                notifyItemRemoved(position);
+            }
+        });
     }
 
     private void dissmissPoup() {

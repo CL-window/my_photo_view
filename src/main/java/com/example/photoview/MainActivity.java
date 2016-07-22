@@ -1,13 +1,16 @@
 package com.example.photoview;
 
+import android.app.Dialog;
 import android.app.LoaderManager;
 import android.content.CursorLoader;
+import android.content.DialogInterface;
 import android.content.Loader;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Environment;
 import android.provider.MediaStore;
 import android.provider.Settings;
+import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.support.v7.widget.DefaultItemAnimator;
@@ -17,7 +20,9 @@ import android.support.v7.widget.RecyclerView;
 import android.support.v7.widget.StaggeredGridLayoutManager;
 import android.text.TextUtils;
 import android.util.Log;
+import android.view.View;
 import android.widget.ImageView;
+import android.widget.TextView;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -30,9 +35,9 @@ public class MainActivity extends AppCompatActivity {
     private String filePath;
     private RecyclerView mRecyclerView;
     private PhotoViewAdapter mPhotoViewAdapter;
-    private List<Map<String,String>> mediaList = new ArrayList<>();
-    private List<Map<String,String>> imageList = new ArrayList<>();
-    private List<Map<String,String>> gifList = new ArrayList<>();
+    private List<Map<String, String>> mediaList = new ArrayList<>();
+    private List<Map<String, String>> imageList = new ArrayList<>();
+    private List<Map<String, String>> gifList = new ArrayList<>();
     DividerGridItemDecoration mDividerGridItemDecoration;
 
     String[] imagesColums = new String[]{
@@ -68,50 +73,57 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void scanGif() {
-        scanGif("gif",filePath);
-        if(gifList.size() > 0){
-            Log.i("slack","size:" + gifList.size());
-            if(gifList.size() < 4){
-                mRecyclerView.setLayoutManager(new StaggeredGridLayoutManager(2, StaggeredGridLayoutManager.VERTICAL));
-                mRecyclerView.removeItemDecoration(mDividerGridItemDecoration);
-                mDividerGridItemDecoration = new DividerGridItemDecoration(this);
-                mRecyclerView.addItemDecoration(mDividerGridItemDecoration);
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                scanGif("gif", filePath);
+                if (gifList.size() > 0) {
+                    Log.i("slack", "size:" + gifList.size());
+                    if (gifList.size() <= 4) {
+                        mRecyclerView.setLayoutManager(new StaggeredGridLayoutManager(2, StaggeredGridLayoutManager.VERTICAL));
+                        mRecyclerView.removeItemDecoration(mDividerGridItemDecoration);
+                        mDividerGridItemDecoration = new DividerGridItemDecoration(MainActivity.this);
+                        mRecyclerView.addItemDecoration(mDividerGridItemDecoration);
+                    }
+                    mPhotoViewAdapter = new PhotoViewAdapter(mRecyclerView, gifList);
+                    mRecyclerView.setAdapter(mPhotoViewAdapter);
+                }
             }
-            mPhotoViewAdapter = new PhotoViewAdapter(this,gifList);
-            mRecyclerView.setAdapter(mPhotoViewAdapter);
-        }
+        }).start();
     }
 
     // 根据文件夹路径读取里面的 gif 图片
-    private void scanGif(String type,String path) {
+    private void scanGif(String type, String path) {
         File file = new File(path);
-        if(!file.exists()){return;}
+        if (!file.exists()) {
+            return;
+        }
         File[] files = file.listFiles();
-        Map<String ,String> map;
-        if(files != null){
-            for(File f : files){
-                if(!f.isDirectory()){
-                    if(isType(type,f.getName())){
+        Map<String, String> map;
+        if (files != null) {
+            for (File f : files) {
+                if (!f.isDirectory()) {
+                    if (isType(type, f.getName())) {
                         map = new HashMap<>();
-                        map.put("pic_path",f.getAbsolutePath());
-                        map.put("file_type",type);
+                        map.put("pic_path", f.getAbsolutePath());
+                        map.put("file_type", type);
                         gifList.add(map);
 //                        Log.i("slack","path " +  f.getPath() + "    " +
 //                        f.getAbsolutePath());
                     }
-                }else{
-                    scanGif(type,path + File.separator + f.getName());
+                } else {
+                    scanGif(type, path + File.separator + f.getName());
                 }
             }
         }
     }
 
     private boolean isType(String type, String name) {
-        if(TextUtils.isEmpty(type) || TextUtils.isEmpty(name)){
+        if (TextUtils.isEmpty(type) || TextUtils.isEmpty(name)) {
             return false;
         }
-        if(name.length() > (type.length()+1) ){
-            if( type.equals( name.substring(name.lastIndexOf(".") + 1 ) ) ){
+        if (name.length() > (type.length() + 1)) {
+            if (type.equals(name.substring(name.lastIndexOf(".") + 1))) {
                 return true;
             }
         }
@@ -133,25 +145,25 @@ public class MainActivity extends AppCompatActivity {
                 if (data != null && !data.isClosed() && data.getCount() > 0) {
                     Log.i("slack", "Count: " + data.getCount());
 //                    data.moveToFirst();
-                    String path ;
-                    Map<String,String> map;
+                    String path;
+                    Map<String, String> map;
                     File file;
-                    while (data.moveToNext()){
+                    while (data.moveToNext()) {
                         path = data.getString(data.getColumnIndexOrThrow(MediaStore.Video.Media.DATA));
                         map = new HashMap<>();
-                        map.put("file_path",path);
+                        map.put("file_path", path);
 //                        Log.i("slack", "filePath: " + path);
 //                        Log.i("slack", "title: " + data.getColumnIndexOrThrow(MediaStore.Video.Media.TITLE) );
                         //获取当前Video对应的Id，然后根据该ID获取其Thumb
                         int id = data.getInt(data.getColumnIndexOrThrow(MediaStore.Video.Media._ID));
-                        Cursor thumbCursor = getContentResolver().query(MediaStore.Video.Thumbnails.EXTERNAL_CONTENT_URI, mediaThumbColumns, MediaStore.Video.Thumbnails.VIDEO_ID +"=?", new String[]{id+""}, null);
+                        Cursor thumbCursor = getContentResolver().query(MediaStore.Video.Thumbnails.EXTERNAL_CONTENT_URI, mediaThumbColumns, MediaStore.Video.Thumbnails.VIDEO_ID + "=?", new String[]{id + ""}, null);
 
-                        if(thumbCursor.moveToFirst()){
+                        if (thumbCursor.moveToFirst()) {
                             path = thumbCursor.getString(thumbCursor.getColumnIndexOrThrow(MediaStore.Video.Thumbnails.DATA));
 //                            Log.i("slack","thumbPath: " + path);
-                            map.put("pic_path",path);
+                            map.put("pic_path", path);
                         }
-                        Log.i("slack",map.get("file_path") + "," + map.get("pic_path"));
+                        Log.i("slack", map.get("file_path") + "," + map.get("pic_path"));
                         mediaList.add(map);
                     }
                     data.close();
@@ -160,7 +172,7 @@ public class MainActivity extends AppCompatActivity {
                     Log.i("slack", "no data");
                 }
                 Log.i("slack", "mediaList: " + mediaList.size());
-                mPhotoViewAdapter = new PhotoViewAdapter(getApplicationContext(),mediaList);
+                mPhotoViewAdapter = new PhotoViewAdapter(mRecyclerView, mediaList);
                 mRecyclerView.setAdapter(mPhotoViewAdapter);
             }
 
@@ -186,12 +198,12 @@ public class MainActivity extends AppCompatActivity {
                     Log.i("slack", "Count: " + data.getCount());
                     data.moveToFirst();
                     String path;
-                    Map<String,String> map;
+                    Map<String, String> map;
                     File file;
-                    while (data.moveToNext()){
+                    while (data.moveToNext()) {
                         path = data.getString(data.getColumnIndex(MediaStore.Images.Media.DATA));
                         map = new HashMap<>();
-                        map.put("pic_path",path);
+                        map.put("pic_path", path);
                         imageList.add(map);
 //                        Log.i("slack", "Path: " + path);
 //                        Log.i("slack", "Date: " + data.getString(data.getColumnIndex(MediaStore.Images.Media.DATE_MODIFIED)));
@@ -202,7 +214,7 @@ public class MainActivity extends AppCompatActivity {
                     Log.i("slack", "no data");
                 }
                 Log.i("slack", "imageList: " + imageList.size());
-                mPhotoViewAdapter = new PhotoViewAdapter(getApplicationContext(),imageList);
+                mPhotoViewAdapter = new PhotoViewAdapter(mRecyclerView, imageList);
                 mRecyclerView.setAdapter(mPhotoViewAdapter);
             }
 
@@ -220,9 +232,12 @@ public class MainActivity extends AppCompatActivity {
 //        mPhotoViewAdapter = new PhotoViewAdapter(this,mDatas);
     }
 
+    TextView right;
+    View cancleView;
+
     private void initView() {
         filePath = Environment.getExternalStorageDirectory().getAbsolutePath() + File.separator + "Movies";
-        mDividerGridItemDecoration = new DividerGridItemDecoration(this,2);
+        mDividerGridItemDecoration = new DividerGridItemDecoration(this, 2);
         mRecyclerView = (RecyclerView) findViewById(R.id.photo_recyclerview);
         //设置布局管理器
 //        mRecyclerView.setLayoutManager(new LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false));  // 现行管理器，支持横向、纵向。
@@ -236,6 +251,61 @@ public class MainActivity extends AppCompatActivity {
 //        mRecyclerView.setItemAnimator(new DefaultItemAnimator());
         //添加分割线
         mRecyclerView.addItemDecoration(mDividerGridItemDecoration);
+
+        right = (TextView) findViewById(R.id.head_rigth);
+        cancleView = findViewById(R.id.cancle_view);
+        cancleView.setVisibility(View.GONE);
+        right.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+//                Log.i("slack","click...right");
+                if (cancleView.getVisibility() == View.GONE) {
+                    cancleView.setVisibility(View.VISIBLE);
+                    right.setText("删除");
+                    mPhotoViewAdapter.operation = true;
+                } else {
+                    Log.i("slack", "click...del");
+                    deleteSelect();
+                }
+            }
+        });
+        findViewById(R.id.cancle).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+//                Log.i("slack","click...cancle");
+                cancleSelect();
+
+            }
+        });
+    }
+
+    private void cancleSelect() {
+        cancleView.setVisibility(View.GONE);
+        right.setText("操作");
+        mPhotoViewAdapter.cancleSelect();
+    }
+
+    private void deleteSelect() {
+        new AlertDialog.Builder(this).setMessage("确认删除这些吗?")
+                .setTitle("温馨提示")
+                .setPositiveButton("确认", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        new Thread(new Runnable() {
+                            @Override
+                            public void run() {
+                                for (int i = 0; i < mPhotoViewAdapter.selectPath.length; i++) {
+                                    if (!TextUtils.isEmpty(mPhotoViewAdapter.selectPath[i])) {
+                                        mPhotoViewAdapter.removeData(i);
+                                        new File(mPhotoViewAdapter.selectPath[i]).delete();
+                                    }
+                                }
+                            }
+                        }).start();
+                        cancleSelect();
+                        dialog.dismiss();
+                    }
+                }).setNegativeButton("取消", null).show();
 
     }
 }

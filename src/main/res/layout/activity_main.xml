@@ -6,11 +6,32 @@
     android:padding="5dp"
     tools:context="com.example.photoview.MainActivity">
 
+    <include
+        android:id="@+id/top"
+        layout="@layout/activity_head"/>
+
     <android.support.v7.widget.RecyclerView
         android:id="@+id/photo_recyclerview"
+        android:layout_below="@id/top"
         android:divider="#ffff0000"
         android:dividerHeight="10dp"
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
+    <LinearLayout
+        android:id="@+id/cancle_view"
+        android:layout_width="match_parent"
+        android:layout_height="30dp"
+        android:layout_alignParentBottom="true"
+        android:gravity="right|center"
+        android:paddingRight="10dp"
+        android:background="#777"
+        >
+        <TextView
+            android:id="@+id/cancle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="取消"/>
+
+    </LinearLayout>
 </RelativeLayout>
